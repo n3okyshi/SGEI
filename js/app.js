@@ -143,7 +143,6 @@ const App = {
                 break;
 
             // --- ROTAS EM DESENVOLVIMENTO ---
-            case 'matriculas':
             case 'turmas':
             case 'professores':
             case 'frequencia':

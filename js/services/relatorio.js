@@ -36,31 +36,35 @@ const RelatorioService = {
         // 3. PROCESSAR CADA ANO LETIVO
         matriculas.forEach(matricula => {
             const escola = DB.data.escolas.find(e => e.id == matricula.escolaId);
+            if (!escola) {
+                console.error("Escola não encontrada para ID:", matricula.escolaId);
+                return null;
+            }
+
             const turma = DB.data.turmas.find(t => t.id == matricula.turmaId);
+            if (!turma) {
+                console.error("Turma não encontrada para ID:", matricula.turmaId);
+                return null;
+            }
 
             const dadosAno = {
                 ano: matricula.ano,
-                escolaNome: escola ? escola.nome : "Escola Externa / Dados Legados",
-                cidade: "Brasília-DF", // Exemplo fixo, idealmente viria do cadastro da escola
-                turmaNome: turma ? turma.nome : "Turma Integrada",
+                escolaNome: escola.nome,
+                cidade: escola.cidade || "Brasília-DF", // Exemplo fixo, idealmente viria do cadastro da escola
+                turmaNome: turma.nome,
                 situacaoFinal: matricula.status, // APROVADO, REPROVADO, TRANSF, ATIVO
                 componentesCurriculares: []
             };
 
             // 4. COMPILAR NOTAS (CRITÉRIO DE INTEGRIDADE: DUAS CASAS DECIMAIS)
             // Itera sobre a Base Nacional Comum (Disciplinas)
-            DB.data.disciplinas.forEach(disciplina => {
+            const disciplinas = DB.data.disciplinas;
+            const avaliacoes = DB.data.avaliacoes.filter(av => av.alunoId === alunoId && av.ano === matricula.ano);
+            const desempenho = avaliacoes.reduce((acc, av) => acc + parseFloat(av.nota), 0) / disciplinas.length;
 
-                // Nota: Em um sistema SQL real, filtraríamos as avaliações por 
-                // WHERE aluno_id = X AND disciplina_id = Y AND ano_letivo = Z.
-                // Aqui, usamos um helper para simular essa agregação no JSON local.
-                const desempenho = this._calcularDesempenhoDisciplina(alunoId, disciplina.id, matricula.ano);
-
-                dadosAno.componentesCurriculares.push({
-                    disciplina: disciplina.nome,
-                    mediaFinal: desempenho.media, // String formatada "XX.XX"
-                    totalFaltas: desempenho.faltas
-                });
+            dadosAno.componentesCurriculares.push({
+                mediaFinal: desempenho.toFixed(2),
+                totalFaltas: avaliacoes.filter(av => av.nota === "0.00").length
             });
 
             historico.vidaAcademica.push(dadosAno);
@@ -75,40 +79,38 @@ const RelatorioService = {
      */
     _calcularDesempenhoDisciplina: function (alunoId, disciplinaId, ano) {
         // Busca notas lançadas no 'banco' de avaliações
-        // Adaptação: O DB.js atual simplificado não tem o link direto Avaliação -> Disciplina.
-        // Lógica de Integridade: Vamos somar as notas encontradas ou retornar traço se não houver.
-
-        const avaliacoesDoAluno = DB.data.avaliacoes.filter(av => av.alunoId == alunoId);
+        const avaliacoesDoAluno = DB.data.avaliacoes.filter(av => av.alunoId === alunoId && av.disciplinaId === disciplinaId && av.ano === ano);
 
         // Se não tiver notas, retorna traço (comum em históricos para isenções ou início de ano)
         if (!avaliacoesDoAluno || avaliacoesDoAluno.length === 0) {
             return { media: "---", faltas: 0 };
         }
 
-        // LÓGICA DE MOCK INTELIGENTE (Para fins de protótipo):
-        // Se houver notas, vamos calcular uma média real baseada nos dados
-        // Num sistema real, somaríamos apenas as notas daquela disciplina específica.
-        let soma = 0;
-        let contador = 0;
+        const soma = avaliacoesDoAluno.reduce((acc, av) => {
+            if (av.nota === null || av.nota === undefined) {
+                console.error("Nota nula ou indefinida para avaliação:", av);
+                return acc;
+            }
+            return acc + parseFloat(av.nota);
+        }, 0);
 
-        avaliacoesDoAluno.forEach(av => {
-            soma += parseFloat(av.nota);
-            contador++;
-        });
-
-        if (contador === 0) return { media: "---", faltas: 0 };
+        const contador = avaliacoesDoAluno.length;
 
         // Simulação de distribuição por disciplina para não ficar tudo igual no relatório
         // (Apenas visual, num sistema real isso não existiria)
         const variacao = (disciplinaId.length * 0.5);
-        let mediaCalculada = (soma / contador) + variacao;
+
+        const mediaCalculada = (soma / contador) + variacao;
 
         // Constraint: Teto 10.0
-        if (mediaCalculada > 10) mediaCalculada = 10;
+        const media = mediaCalculada > 10 ? 10 : mediaCalculada.toFixed(2);
+
+        // Simulação de faltas, evitar null pointer references
+        const faltas = avaliacoesDoAluno.filter(av => av.nota === "0.00").length;
 
         return {
-            media: mediaCalculada.toFixed(2), // REGRA DE OURO: 2 CASAS DECIMAIS
-            faltas: Math.floor(Math.random() * 5) // Mock de faltas
+            media,
+            faltas
         };
     },
 

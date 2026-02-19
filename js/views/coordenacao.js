@@ -39,9 +39,13 @@ const CoordenacaoView = {
         if (pendentes.length === 0) {
             html += `<p>Tudo em dia! Nenhum planejamento pendente.</p>`;
         } else {
+            // O(1) Lookups optimization: Pre-fetch users and disciplines into Maps
+            const usuariosMap = new Map(DB.data.usuarios.map(u => [String(u.id), u]));
+            const disciplinasMap = new Map(DB.data.disciplinas.map(d => [String(d.id), d]));
+
             pendentes.forEach(p => {
-                const prof = DB.data.usuarios.find(u => u.id == p.professorId);
-                const disciplina = DB.data.disciplinas.find(d => d.id == p.disciplinaId);
+                const prof = usuariosMap.get(String(p.professorId));
+                const disciplina = disciplinasMap.get(String(p.disciplinaId));
 
                 html += `
                 <div style="border:1px solid #ddd; padding:15px; margin-bottom:10px; border-radius:5px;">

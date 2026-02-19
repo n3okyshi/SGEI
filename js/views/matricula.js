@@ -188,7 +188,7 @@ const MatriculaView = {
 
         // Ocorrências HTML
         let ocorHTML = ocorrencias.length > 0
-            ? ocorrencias.map(o => `<li style="color:red">${Utils.formatDate(o.data)}: ${o.tipo} - ${o.descricao}</li>`).join('')
+            ? ocorrencias.map(o => `<li style="color:red">${Utils.formatDate(o.data)}: ${Utils.escapeHtml(o.tipo)} - ${Utils.escapeHtml(o.descricao)}</li>`).join('')
             : '<li>Nenhuma ocorrência registrada.</li>';
 
         area.innerHTML = `
@@ -214,21 +214,21 @@ const MatriculaView = {
         `;
     },
 
-/**
- * Processa a rematrícula ou transferência do aluno.
- * @param {Number} alunoId - O ID do aluno.
- * @param {String} tipo - O tipo de ação (MESMA_ESCOLA ou TRANSFERENCIA).
- */
+    /**
+     * Processa a rematrícula ou transferência do aluno.
+     * @param {Number} alunoId - O ID do aluno.
+     * @param {String} tipo - O tipo de ação (MESMA_ESCOLA ou TRANSFERENCIA).
+     */
     processarRematricula: function (alunoId, tipo) {
         // Aqui viria a lógica: fechar matrícula anterior se necessário e abrir nova
         alert(`Lógica de ${tipo} iniciada. O sistema criará um novo registro em 'matriculas' com ano ${DB.data.config.anoLetivoAtual}.`);
     },
 
-/**
- * Adiciona uma ocorrência ao aluno.
- * @param {Number} alunoId - O ID do aluno.
- * @returns {undefined}
- */
+    /**
+     * Adiciona uma ocorrência ao aluno.
+     * @param {Number} alunoId - O ID do aluno.
+     * @returns {undefined}
+     */
     adicionarOcorrencia: function (alunoId) {
         const desc = prompt("Descreva a ocorrência (Ex: Suspensão 3 dias por briga):");
         if (desc) {
