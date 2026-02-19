@@ -1,8 +1,8 @@
 /**
- * JS/DB.JS - VERSÃO 3.0 (ROBUSTA)
+ * JS/DB.JS - VERSÃO 0.0.1 
  * Suporte a histórico, filiação completa, ocorrências e calendário.
  */
-const DB_KEY = 'sge_v3_enterprise'; // Nova chave para resetar estrutura antiga
+const DB_KEY = 'sgei_valpha'; // Nova chave para resetar estrutura antiga
 
 const DB = {
     data: {
@@ -11,19 +11,20 @@ const DB = {
         },
         usuarios: [],     // Atores do sistema
         escolas: [],      // Unidades
-        calendario: [],   // Feriados, dias letivos, eventos (Novo)
+        calendario: [],   // Feriados, dias letivos, eventos 
         turmas: [],       // Classes
-        disciplinas: [],  // Matérias (Matemática, Hist...) (Novo)
+        disciplinas: [],  // Matérias (Matemática, Hist...) 
 
         // O Core do Aluno
         alunos: [],       // Dados Pessoais (Imutáveis)
-        matriculas: [],   // Vínculo Aluno <-> Escola <-> Ano (Histórico)
-        ocorrencias: [],  // Disciplinar (Novo)
+        matriculas: [],   // Vínculo Aluno <-> Escola <-> Ano (Histórico de Vínculo)
+        historico: [],    // NOTAS FINAIS DE ANOS ANTERIORES (IMUTÁVEIS)
+        ocorrencias: [],  // Disciplinar 
 
         // Pedagógico
-        planejamentos: [], // Planos de aula dos professores (Novo)
-        avaliacoes: [],    // Notas
-        frequencia: [],    // Presença
+        planejamentos: [], // Planos de aula dos professores 
+        avaliacoes: [],    // Notas do ANO ATUAL
+        frequencia: [],    // Presença do ANO ATUAL
         configAvaliacoes: [] // Regras de nota
     },
 
@@ -59,27 +60,31 @@ const DB = {
      * @returns {undefined}
      */
     seed: function () {
-        console.log("[DB] Semeando dados complexos...");
+        console.log("[DB] Semeando dados...");
 
         // 1. USUÁRIOS
         this.data.usuarios = [
             { id: 1, nome: "Admin Secretaria", login: "sec", senha: "123", role: "secretaria_geral" },
-            { id: 2, nome: "Coord. Geral", login: "coord", senha: "123", role: "coordenacao" }, // Coordena várias escolas ou uma
+            { id: 2, nome: "Coord. Geral", login: "coord", senha: "123", role: "coordenacao" },
             { id: 3, nome: "Dir. Roberto", login: "dir", senha: "123", role: "gestao", escolaId: 1 },
-            { id: 4, nome: "Prof. Joaquim", login: "prof", senha: "123", role: "professor" }
+            { id: 4, nome: "Prof. Joaquim", login: "prof", senha: "123", role: "professor" },
+            { id: 5, nome: "Joãozinho (Aluno)", login: "aluno", senha: "123", role: "aluno", alunoId: 1 }
         ];
 
         // 2. DISCIPLINAS (Base Curricular)
         this.data.disciplinas = [
-            { id: 'mat', nome: 'Matemática' },
-            { id: 'port', nome: 'Português' },
-            { id: 'hist', nome: 'História' },
-            { id: 'cie', nome: 'Ciências' }
+            { id: 'mat', nome: 'Matemática', area: 'Exatas' },
+            { id: 'port', nome: 'Português', area: 'Linguagens' },
+            { id: 'hist', nome: 'História', area: 'Humanas' },
+            { id: 'cie', nome: 'Ciências', area: 'Natureza' },
+            { id: 'geo', nome: 'Geografia', area: 'Humanas' },
+            { id: 'art', nome: 'Artes', area: 'Linguagens' },
+            { id: 'ef', nome: 'Educação Física', area: 'Linguagens' }
         ];
 
         // 3. CALENDÁRIO (Eventos globais e locais)
         this.data.calendario = [
-            { data: '2026-02-09', tipo: 'inicio_aulas', descricao: 'Início do Ano Letivo', escolaId: null }, // Null = Todas
+            { data: '2026-01-16', tipo: 'inicio_aulas', descricao: 'Início do Ano Letivo', escolaId: null }, // Null = Todas
             { data: '2026-04-21', tipo: 'feriado', descricao: 'Tiradentes', escolaId: null },
             { data: '2026-06-20', tipo: 'evento', descricao: 'Festa Junina', escolaId: 1 } // Só na escola 1
         ];
@@ -90,46 +95,85 @@ const DB = {
                 id: 1,
                 nome: "Joãozinho da Silva",
                 dataNascimento: "2012-05-15",
-                endereco: "Rua das Flores, 123, Centro",
+                naturalidade: "Brasília-DF",
+                endereco: "Rua das Flores, 123, Asa Norte",
                 filiacao: {
                     pai: "José da Silva",
                     mae: "Maria da Silva",
                     responsavelLegal: "Maria da Silva"
                 },
-                documento: "123.456.789-00"
+                documento: "123.456.789-00",
+                rg: "3.333.333-SSP/DF"
             }
         ];
 
-        // 5. MATRÍCULAS (Histórico escolar - Onde ele estudou e quando)
+        // 5. MATRÍCULAS (Onde ele estudou)
         this.data.matriculas = [
-            // Histórico Antigo (Exemplo)
+            // 2024 - 6º Ano (Fundamental II)
+            { id: 9, alunoId: 1, escolaId: 2, ano: 2024, turmaId: 98, status: 'APROVADO', etapa: 'Fundamental II', serie: '6º Ano' },
+            // 2025 - 7º Ano (Fundamental II)
+            { id: 10, alunoId: 1, escolaId: 2, ano: 2025, turmaId: 99, status: 'APROVADO', etapa: 'Fundamental II', serie: '7º Ano' },
+            // 2026 - 8º Ano (Atual)
+            { id: 11, alunoId: 1, escolaId: 1, ano: 2026, turmaId: 101, status: 'ATIVO', etapa: 'Fundamental II', serie: '8º Ano', dataMatricula: '2026-01-20' }
+        ];
+
+        // 6. HISTÓRICO CONSOLIDADO (Anos Fechados)
+        // Dados imutáveis de anos anteriores para o Relatório Oficial
+        this.data.historico = [
             {
-                id: 10, alunoId: 1, escolaId: 2, ano: 2025,
-                turmaId: 99, status: 'APROVADO', dataMatricula: '2025-02-01', dataSaida: '2025-12-15'
+                alunoId: 1,
+                ano: 2024,
+                escolaId: 2,
+                serie: '6º Ano',
+                diasLetivos: 200,
+                frequenciaGlobal: 198,
+                situacao: 'APROVADO',
+                notas: [
+                    { disciplinaId: 'mat', mediaFinal: "8.50", faltas: 2 },
+                    { disciplinaId: 'port', mediaFinal: "9.00", faltas: 0 },
+                    { disciplinaId: 'hist', mediaFinal: "8.00", faltas: 0 },
+                    { disciplinaId: 'cie', mediaFinal: "7.50", faltas: 0 },
+                    { disciplinaId: 'geo', mediaFinal: "8.20", faltas: 0 },
+                    { disciplinaId: 'art', mediaFinal: "10.00", faltas: 0 },
+                    { disciplinaId: 'ef', mediaFinal: "10.00", faltas: 0 }
+                ]
             },
-            // Matrícula Atual
             {
-                id: 11, alunoId: 1, escolaId: 1, ano: 2026,
-                turmaId: 101, status: 'ATIVO', dataMatricula: '2026-01-20', dataSaida: null
+                alunoId: 1,
+                ano: 2025,
+                escolaId: 2,
+                serie: '7º Ano',
+                diasLetivos: 200,
+                frequenciaGlobal: 195,
+                situacao: 'APROVADO',
+                notas: [
+                    { disciplinaId: 'mat', mediaFinal: "7.80", faltas: 4 },
+                    { disciplinaId: 'port', mediaFinal: "8.50", faltas: 1 },
+                    { disciplinaId: 'hist', mediaFinal: "9.00", faltas: 0 },
+                    { disciplinaId: 'cie', mediaFinal: "8.00", faltas: 0 },
+                    { disciplinaId: 'geo', mediaFinal: "8.50", faltas: 0 },
+                    { disciplinaId: 'art', mediaFinal: "9.50", faltas: 0 },
+                    { disciplinaId: 'ef', mediaFinal: "10.00", faltas: 0 }
+                ]
             }
         ];
 
-        // 6. OCORRÊNCIAS (Disciplinar)
-        this.data.ocorrencias = [
-            { id: 1, alunoId: 1, data: '2026-03-10', tipo: 'advertencia', descricao: 'Conversa paralela excessiva', autor: 'Prof. Joaquim' }
+        // 7. AVALIAÇÕES (Ano Atual - 2026)
+        // Notas parciais que vão compor o boletim do ano corrente
+        this.data.avaliacoes = [
+            // Matemática - Bimestre 1
+            { id: 1, alunoId: 1, disciplinaId: 'mat', etapa: 1, valor: "8.00", tipo: 'P1' },
+            { id: 2, alunoId: 1, disciplinaId: 'mat', etapa: 1, valor: "7.00", tipo: 'Trabalho' },
+            // Português - Bimestre 1
+            { id: 3, alunoId: 1, disciplinaId: 'port', etapa: 1, valor: "9.50", tipo: 'P1' }
         ];
 
-        // 7. PLANEJAMENTOS (Coordenação aprova)
-        this.data.planejamentos = [
-            {
-                id: 1, professorId: 4, turmaId: 101, disciplinaId: 'mat',
-                bimestre: 1, conteudo: 'Equações de 1º Grau', status: 'PENDENTE' // PENDENTE, APROVADO, REJEITADO
-            }
+        this.data.escolas = [
+            { id: 1, nome: "Escola Modelo (Atual)", diretor: "Roberto", cidade: "Brasília-DF" },
+            { id: 2, nome: "Escola Antiga (Legado)", diretor: "João", cidade: "Goiânia-GO" }
         ];
 
-        // Dados auxiliares para o app rodar
-        this.data.escolas = [{ id: 1, nome: "Escola Modelo", diretor: "Roberto" }, { id: 2, nome: "Escola Antiga", diretor: "João" }];
-        this.data.turmas = [{ id: 101, nome: "7º A", ano: 2026, escolaId: 1 }];
+        this.data.turmas = [{ id: 101, nome: "8º A", ano: 2026, escolaId: 1 }];
 
         this.save();
     },
@@ -137,6 +181,12 @@ const DB = {
     // Helper: Buscar matrícula ativa de um aluno
     getMatriculaAtiva: function (alunoId, ano) {
         return this.data.matriculas.find(m => m.alunoId == alunoId && m.ano == ano && m.status === 'ATIVO');
+    },
+
+    // Método auxiliar para facilitar limpeza em testes
+    reset: function () {
+        localStorage.removeItem(DB_KEY);
+        this.seed();
     }
 };
 

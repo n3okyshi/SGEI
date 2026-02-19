@@ -14,12 +14,12 @@ SistemaEscolarCompleto/
 │   └── views/          (As telas do sistema)
 │       ├── aluno.js
 │       ├── coordenacao.js
+│       ├── dashboard.js
+│       ├── frequencia.js
 │       ├── login.js
 │       ├── matricula.js
-│       ├── dashboard.js
-│       ├── professor.js
-│       ├── secretaria.js
 │       ├── notas.js
-│       └── frequencia.js
+│       ├── professor.js
+│       └── secretaria.js
 ├── img/                (Logos e ícones)
 └── dados/              (Onde você salvará seus backups JSON manualmente)
