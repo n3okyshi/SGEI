@@ -1,0 +1,96 @@
+0.3 alpha - 
+
+Role: Atue como um Gerente de Produto Sênior (PM) e Arquiteto de Soluções especialista em EdTech e Gestão Pública.
+
+Contexto do Projeto (SGE Integrado):
+Estamos desenvolvendo um sistema escolar "end-to-end" (de ponta a ponta) para substituir sistemas legados fragmentados (cenário similar às falhas do 'educaDF').
+A Dor Principal: A falta de integração de dados impede a emissão confiável de documentos vitais (Históricos Escolares, Certificados de Conclusão). Alunos perdem vagas em universidades porque o sistema atual não consegue compilar as notas de anos anteriores com as atuais.
+O Objetivo: Garantir a rastreabilidade e integridade do dado desde a matrícula inicial, passando por transferências, ocorrências e avaliações, até a impressão do diploma final.
+
+Arquitetura de Atores (Hierarquia):
+O sistema deve atender aos seguintes níveis de acesso, garantindo a soberania dos dados de cima para baixo:
+* Estratégico: Secretaria de Educação (Visão de Rede/Município) e Conselho Municipal.
+* Tático: Supervisão e Gestão Escolar (Diretor e Secretário Escolar).
+* Operacional Pedagógico: Coordenação Pedagógica e Professores.
+* Ponta: Aluno e Responsáveis Legais.
+
+Regras de Negócio Inegociáveis (Constraints):
+A "Regra de Ouro" da Avaliação: Centralização da Regra, Descentralização da Nota.
+A Coordenação define a estrutura (Ex: "Prova P1", Sigla "P1", Valor Máximo "10,00").
+O Professor apenas lança as notas dentro dessa estrutura. Ele não pode alterar o peso ou o nome da avaliação oficial.
+Precisão Numérica: Todo o sistema opera estritamente com duas casas decimais para evitar erros de arredondamento em médias finais e históricos.
+Histórico vs. Ano Letivo: O sistema deve diferenciar dados imutáveis (histórico passado) de dados mutáveis (ano vigente). Deve haver suporte robusto para "Transferências" (entrada/saída de alunos durante o ano) sem perder o registro da escola anterior.
+Enturmação vs. Matrícula: O aluno pode estar "Matriculado" na escola (vínculo administrativo) sem estar "Enturmado" (vínculo pedagógico).
+
+Stack Tecnológica Atual:
+Estamos prototipando em Vanilla JS com persistência em JSON local (localStorage) para validação rápida de regras de negócio, mas a arquitetura deve ser pensada para escalar (futura migração para Frameworks/SQL).
+
+Solicitação (Deliverables):
+Com base neste contexto, eu preciso de:
+
+Histórias de Usuário (User Stories) para [INSERIR PERFIL AQUI OU "TODOS OS PERFIS"], focando na integridade necessária para a emissão de documentos oficiais.
+
+Critérios de Aceite que validem se o fluxo de dados suporta a geração de um Histórico Escolar completo.
+
+Perfis a cobrir:
+* Secretaria de Educação: (Foco em visão de rede e criação de unidades).
+* Supervisão/Conselho: 
+* Direção/Secretaria da Escola:(Foco em matrícula, enturmação e emissão de histórico).
+* Coordenação Pedagógica: (Foco na criação das regras de avaliação e calendário).
+* Professor: (Foco no lançamento de notas e frequência dentro das regras).
+* Aluno/Responsável: (Foco na visualização do boletim e progresso).
+
+Implementação Técnica (O "Coração" do Sistema): O código lógico para gerar o Histórico Escolar, provando que a integração de dados funciona.
+
+1. Perfil: Secretaria de Educação (Estratégico)
+História: "Como Secretário de Educação, eu quero visualizar um relatório consolidado de todas as unidades escolares, para que eu possa auditar quais escolas estão com pendências de lançamento de notas antes do fechamento do ano letivo."
+
+Critérios de Aceite:
+
+O sistema deve impedir o fechamento do ano letivo se houver turmas sem notas lançadas (Integridade de Processo).
+
+A criação de escolas deve validar CNPJ/Código INEP único para evitar duplicidade de entidades no histórico do aluno.
+
+O sistema deve permitir a transferência de "acervo" (dados de alunos) de uma escola extinta para outra ativa.
+
+2. Perfil: Coordenação Pedagógica (Tático/Normativo)
+História: "Como Coordenador, eu quero criar regras de avaliação (Ex: Prova P1) que sejam aplicadas automaticamente a todas as turmas de um nível, para garantir que o cálculo da média final seja matematicamente idêntico em toda a escola."
+
+Critérios de Aceite:
+
+Imutabilidade da Regra: Uma vez que um professor lançou uma nota vinculada a uma regra (Ex: P1), a coordenação não pode alterar o valor máximo dessa regra para um valor inferior à maior nota já lançada.
+
+Validação de Soma: A soma dos pesos das avaliações do bimestre deve igualar exatamente 100% ou o valor total do período (Ex: 25,00 pontos).
+
+3. Perfil: Professor (Operacional)
+História: "Como Professor, eu quero lançar as notas em uma planilha que valide automaticamente os valores digitados, para que eu não cometa erros de digitação que prejudiquem o histórico do aluno (ex: digitar 100 ao invés de 10.0)."
+
+Critérios de Aceite:
+
+Bloqueio de Input: O campo deve bloquear valores superiores ao valorMaximo definido pela coordenação.
+
+Sanitização Decimal: Ao sair do campo (blur), o sistema deve converter automaticamente inputs como "8,5" ou "8.5" para "8.50", garantindo precisão de duas casas decimais no banco de dados.
+
+4. Perfil: Direção (Gestão Documental)
+História: "Como Diretor, eu quero gerar um Histórico Escolar que compile dados de anos anteriores (mesmo de outras escolas), para entregar um documento válido legalmente para transferência ou universidade."
+
+Critérios de Aceite:
+
+Rastreabilidade: O documento deve indicar explicitamente o nome da escola onde cada ano foi cursado (Ex: 2024 na Escola A, 2025 na Escola B).
+
+Tratamento de Transferência: Se o aluno entrou no meio do ano, o sistema deve exibir uma observação ou calcular a média ponderando as "Notas de Transferência" importadas.
+
+Status Final: O sistema só pode marcar o status "CONCLUÍDO" no histórico se todas as disciplinas obrigatórias tiverem média >= média mínima de aprovação.
+
+
+
+Parte 2: Implementação Técnica - O "Gerador de Histórico"
+[parte a ser criado o texto ainda, mas deve garantir a integralidade dos relatório do aluno independente da unidade escolar, ou sej,a carrega todos os dados ao longo de toda a vida acadêmica do estudante, vamos fazer funciona no arquivo `./js/services/relatorio.js`]
+
+Esta implementação resolve a fragmentação dos dados cruzando as tabelas de alunos, matriculas (histórico), escolas e avaliacoes.
+
+Destaques da Implementação:
+Reconstrução Temporal: Ordena cronologicamente a vida do aluno.
+Referência Cruzada: Busca o nome da escola correspondente a cada ano letivo (suporte a transferências).
+Precisão Numérica: Força .toFixed(2) em todas as exibições de nota.
+Layout Oficial: Gera um HTML formatado como documento oficial (cabeçalho, dados, tabela técnica e assinaturas).

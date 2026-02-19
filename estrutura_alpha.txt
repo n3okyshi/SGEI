@@ -1,0 +1,25 @@
+SistemaEscolarCompleto/
+│
+├── index.html          (O esqueleto principal)
+├── css/
+│   ├── style.css       (Nosso estilo visual)
+│   └── reset.css       (Para padronizar navegadores)
+├── js/
+│   ├── app.js          (O cérebro: controla qual tela aparece)
+│   ├── db.js           (O banco de dados simulado: salva/carrega JSON)
+│   ├── auth.js         (Simula o login: Professor, Diretor, Aluno)
+│   ├── utils.js         
+│   └── services/          
+│       └── relatorio.js
+│   └── views/          (As telas do sistema)
+│       ├── aluno.js
+│       ├── coordenacao.js
+│       ├── login.js
+│       ├── matricula.js
+│       ├── dashboard.js
+│       ├── professor.js
+│       ├── secretaria.js
+│       ├── notas.js
+│       └── frequencia.js
+├── img/                (Logos e ícones)
+└── dados/              (Onde você salvará seus backups JSON manualmente)
