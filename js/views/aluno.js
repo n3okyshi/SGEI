@@ -11,13 +11,15 @@ const AlunoView = {
      * @param {Object} usuario - O objeto com as informações do aluno.
      */
     renderBoletim: function (container, usuario) {
+        const alunoId = usuario.alunoId || usuario.id;
+
         // Em vez de uma tabela estática, oferecemos a visão do Histórico Oficial
         container.innerHTML = `
             <div class="card">
                 <h2>Portal do Aluno: ${Utils.escapeHtml(usuario.nome)}</h2>
                 <p>Aqui você pode visualizar seu boletim atual ou gerar seu Histórico Escolar Completo para fins de transferência ou faculdade.</p>
                 <div style="display:flex; gap:10px; margin-top:20px;">
-                    <button class="btn" onclick="AlunoView.gerarDocumento(${usuario.id})">📄 Gerar Histórico Oficial (PDF/Print)</button>
+                    <button class="btn" onclick="AlunoView.gerarDocumento(${alunoId})">📄 Gerar Histórico Oficial (PDF/Print)</button>
                     <button class="btn" style="background:#2c3e50" onclick="alert('Boletim Bimestral em desenvolvimento')">📊 Ver Notas 2026</button>
                 </div>
             </div>

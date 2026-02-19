@@ -5,7 +5,7 @@ const RelatorioService = {
 
     /**
      * GERA O OBJETO DE DADOS ESTRUTURADOS PARA O HISTÓRICO ESCOLAR.
-     * Cruza: Aluno + Matrículas (Histórico) + Avaliações + Disciplinas + Escolas.
+     * Cruza: Aluno + Matrículas (Histórico) + Avaliações + Disciplinas + Escolas + Histórico Imutável.
      * Objetivo: Garantir integridade dos dados de ponta a ponta.
      */
     gerarHistoricoEscolar: function (alunoId) {
@@ -21,94 +21,118 @@ const RelatorioService = {
                 nome: aluno.nome,
                 nascimento: Utils.formatDate(aluno.dataNascimento),
                 documento: aluno.documento || "Não informado",
+                rg: aluno.rg || "Não informado",
                 endereco: aluno.endereco || "Não informado",
-                filiacao: aluno.filiacao
+                filiacao: aluno.filiacao,
+                naturalidade: aluno.naturalidade || "Brasília-DF"
             },
             vidaAcademica: []
         };
 
-        // 2. BUSCAR TODO O HISTÓRICO DE MATRÍCULAS (ORDENADO POR ANO)
-        // Isso garante que anos anteriores em outras escolas apareçam corretamente.
-        const matriculas = DB.data.matriculas
-            .filter(m => m.alunoId == alunoId)
-            .sort((a, b) => a.ano - b.ano);
+        // 2. RECUPERAR HISTÓRICO PASSADO (IMUTÁVEL - ANOS FECHADOS)
+        const historicoPassado = DB.data.historico ? DB.data.historico.filter(h => h.alunoId == alunoId) : [];
 
-        // 3. PROCESSAR CADA ANO LETIVO
-        matriculas.forEach(matricula => {
-            const escola = DB.data.escolas.find(e => e.id == matricula.escolaId);
-            const turma = DB.data.turmas.find(t => t.id == matricula.turmaId);
+        historicoPassado.forEach(registro => {
+            const escola = DB.data.escolas.find(e => e.id == registro.escolaId);
 
             const dadosAno = {
-                ano: matricula.ano,
-                escolaNome: escola ? escola.nome : "Escola Externa / Dados Legados",
-                cidade: "Brasília-DF", // Exemplo fixo, idealmente viria do cadastro da escola
-                turmaNome: turma ? turma.nome : "Turma Integrada",
-                situacaoFinal: matricula.status, // APROVADO, REPROVADO, TRANSF, ATIVO
+                ano: registro.ano,
+                escolaNome: escola ? escola.nome : "Escola Legada/Externa",
+                cidade: escola ? escola.cidade : "Brasília-DF",
+                serie: registro.serie,
+                situacaoFinal: registro.situacao || "APROVADO",
+                diasLetivos: registro.diasLetivos || 200,
+                frequencia: registro.frequenciaGlobal || 0,
                 componentesCurriculares: []
             };
 
-            // 4. COMPILAR NOTAS (CRITÉRIO DE INTEGRIDADE: DUAS CASAS DECIMAIS)
-            // Itera sobre a Base Nacional Comum (Disciplinas)
-            DB.data.disciplinas.forEach(disciplina => {
-
-                // Nota: Em um sistema SQL real, filtraríamos as avaliações por 
-                // WHERE aluno_id = X AND disciplina_id = Y AND ano_letivo = Z.
-                // Aqui, usamos um helper para simular essa agregação no JSON local.
-                const desempenho = this._calcularDesempenhoDisciplina(alunoId, disciplina.id, matricula.ano);
-
-                dadosAno.componentesCurriculares.push({
-                    disciplina: disciplina.nome,
-                    mediaFinal: desempenho.media, // String formatada "XX.XX"
-                    totalFaltas: desempenho.faltas
+            // Mapeia as notas salvas no histórico imutável
+            if (registro.notas && Array.isArray(registro.notas)) {
+                registro.notas.forEach(nota => {
+                    const disciplina = DB.data.disciplinas.find(d => d.id === nota.disciplinaId);
+                    if (disciplina) {
+                        dadosAno.componentesCurriculares.push({
+                            disciplina: disciplina.nome,
+                            area: disciplina.area || 'Diversificada',
+                            mediaFinal: nota.mediaFinal, // Já deve vir formatado "XX.XX" do DB
+                            totalFaltas: nota.faltas,
+                            resultado: parseFloat(nota.mediaFinal) >= 5.0 ? "Aprovado" : "Reprovado"
+                        });
+                    }
                 });
-            });
+            }
 
             historico.vidaAcademica.push(dadosAno);
         });
+
+        // 3. RECUPERAR ANO VIGENTE (DADOS DINÂMICOS - 2026)
+        // Busca matrícula ativa
+        const matriculaAtual = DB.data.matriculas.find(m => m.alunoId == alunoId && m.ano == DB.data.config.anoLetivoAtual);
+
+        if (matriculaAtual) {
+            const escolaAtual = DB.data.escolas.find(e => e.id == matriculaAtual.escolaId);
+            const turmaAtual = DB.data.turmas.find(t => t.id == matriculaAtual.turmaId);
+
+            const dadosAnoAtual = {
+                ano: matriculaAtual.ano,
+                escolaNome: escolaAtual ? escolaAtual.nome : "Escola Atual",
+                cidade: escolaAtual ? escolaAtual.cidade : "Brasília-DF",
+                serie: matriculaAtual.serie || "Série Atual",
+                situacaoFinal: "EM CURSO",
+                diasLetivos: 200, // Previsão
+                frequencia: "---",
+                componentesCurriculares: []
+            };
+
+            // Calcular notas parciais baseadas nas avaliações lançadas
+            DB.data.disciplinas.forEach(disciplina => {
+                const desempenho = this._calcularDesempenhoAtual(alunoId, disciplina.id);
+
+                // Só exibe se tiver nota lançada ou se for disciplina obrigatória
+                dadosAnoAtual.componentesCurriculares.push({
+                    disciplina: disciplina.nome,
+                    area: disciplina.area || 'Diversificada',
+                    mediaFinal: desempenho.media,
+                    totalFaltas: desempenho.faltas,
+                    resultado: desempenho.media !== "---" ? (parseFloat(desempenho.media) >= 5.0 ? "Parcial: Aprov." : "Parcial: Reprov.") : "Em Curso"
+                });
+            });
+
+            historico.vidaAcademica.push(dadosAnoAtual);
+        }
+
+        // Ordenação Cronológica Final
+        historico.vidaAcademica.sort((a, b) => a.ano - b.ano);
 
         return historico;
     },
 
     /**
-     * HELPER: Calcula a nota final de uma disciplina para um ano específico.
-     * Simula a agregação de P1 + P2 + Trabalhos.
+     * HELPER: Calcula a nota parcial do ano vigente.
      */
-    _calcularDesempenhoDisciplina: function (alunoId, disciplinaId, ano) {
-        // Busca notas lançadas no 'banco' de avaliações
-        // Adaptação: O DB.js atual simplificado não tem o link direto Avaliação -> Disciplina.
-        // Lógica de Integridade: Vamos somar as notas encontradas ou retornar traço se não houver.
+    _calcularDesempenhoAtual: function (alunoId, disciplinaId) {
+        const avaliacoes = DB.data.avaliacoes.filter(av =>
+            av.alunoId == alunoId &&
+            av.disciplinaId == disciplinaId
+        );
 
-        const avaliacoesDoAluno = DB.data.avaliacoes.filter(av => av.alunoId == alunoId);
-
-        // Se não tiver notas, retorna traço (comum em históricos para isenções ou início de ano)
-        if (!avaliacoesDoAluno || avaliacoesDoAluno.length === 0) {
+        if (!avaliacoes || avaliacoes.length === 0) {
             return { media: "---", faltas: 0 };
         }
 
-        // LÓGICA DE MOCK INTELIGENTE (Para fins de protótipo):
-        // Se houver notas, vamos calcular uma média real baseada nos dados
-        // Num sistema real, somaríamos apenas as notas daquela disciplina específica.
         let soma = 0;
         let contador = 0;
 
-        avaliacoesDoAluno.forEach(av => {
-            soma += parseFloat(av.nota);
+        avaliacoes.forEach(av => {
+            soma += parseFloat(av.valor);
             contador++;
         });
 
-        if (contador === 0) return { media: "---", faltas: 0 };
-
-        // Simulação de distribuição por disciplina para não ficar tudo igual no relatório
-        // (Apenas visual, num sistema real isso não existiria)
-        const variacao = (disciplinaId.length * 0.5);
-        let mediaCalculada = (soma / contador) + variacao;
-
-        // Constraint: Teto 10.0
-        if (mediaCalculada > 10) mediaCalculada = 10;
+        const media = (soma / contador); // Média aritmética simples por enquanto (TODO: Implementar pesos)
 
         return {
-            media: mediaCalculada.toFixed(2), // REGRA DE OURO: 2 CASAS DECIMAIS
-            faltas: Math.floor(Math.random() * 5) // Mock de faltas
+            media: media.toFixed(2),
+            faltas: 0 // TODO: Implementar lógica de faltas futura
         };
     },
 
@@ -119,126 +143,142 @@ const RelatorioService = {
         const dados = this.gerarHistoricoEscolar(alunoId);
 
         if (!dados) {
-            container.innerHTML = `<p style="color:red">Erro ao gerar histórico. Aluno não encontrado.</p>`;
+            container.innerHTML = `<div class="alert alert-error">Erro ao gerar histórico. Aluno não encontrado.</div>`;
             return;
         }
 
-        // Estilos Inline para garantir impressão correta em qualquer browser
-        const styleTable = "width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px;";
-        const styleTh = "border: 1px solid #000; padding: 5px; background-color: #f0f0f0; text-align: center;";
-        const styleTd = "border: 1px solid #000; padding: 5px; text-align: center;";
-        const styleBox = "border: 1px solid #000; padding: 10px; margin-bottom: 15px;";
+        // Helper para sanitizar strings (XSS Prevention)
+        const safe = (str) => Utils.escapeHtml(String(str || ""));
 
-        let html = `
-            <div class="documento-oficial" style="font-family: 'Times New Roman', serif; padding: 40px; max-width: 800px; margin: 0 auto; background: white;">
-                
-                <div style="text-align:center; margin-bottom: 30px;">
-                    <div style="font-size: 50px;">🏛️</div>
-                    <h3 style="margin:5px 0;">SECRETARIA DE ESTADO DE EDUCAÇÃO</h3>
-                    <h2 style="margin:5px 0; text-decoration: underline;">HISTÓRICO ESCOLAR</h2>
-                </div>
+        // Estilos Inline para garantir impressão perfeita (A4)
+        const css = `
+            .doc-container { font-family: 'Times New Roman', serif; max-width: 210mm; margin: 0 auto; padding: 20px; background: white; color: black; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .header h1 { font-size: 18px; margin: 0; text-transform: uppercase; }
+            .header h2 { font-size: 14px; margin: 5px 0; font-weight: normal; }
+            .section-title { background: #eee; border: 1px solid #000; padding: 5px; font-weight: bold; margin-top: 20px; font-size: 12px; }
+            .info-table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
+            .info-table td { border: 1px solid #000; padding: 4px; }
+            .grades-table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 15px; }
+            .grades-table th, .grades-table td { border: 1px solid #000; padding: 4px; text-align: center; }
+            .grades-table th { background: #f9f9f9; }
+            .grades-table td.left { text-align: left; }
+            .signatures { margin-top: 50px; display: flex; justify-content: space-around; text-align: center; font-size: 11px; }
+            .timestamp { font-size: 9px; text-align: right; margin-top: 10px; border-top: 1px solid #ccc; padding-top: 2px; }
 
-                <div style="${styleBox}">
-                    <table style="width:100%; text-align:left;">
-                        <tr>
-                            <td><strong>Nome do Aluno:</strong> ${dados.cabecalho.nome}</td>
-                            <td><strong>Nascimento:</strong> ${dados.cabecalho.nascimento}</td>
-                        </tr>
-                        <tr>
-                            <td><strong>Documento (CPF/RG):</strong> ${dados.cabecalho.documento}</td>
-                            <td><strong>Matrícula Sistema:</strong> ${alunoId}</td>
-                        </tr>
-                        <tr>
-                            <td colspan="2"><strong>Filiação:</strong> ${dados.cabecalho.filiacao.mae} <br> ${dados.cabecalho.filiacao.pai ? '& ' + dados.cabecalho.filiacao.pai : ''}</td>
-                        </tr>
-                    </table>
-                </div>
+            @media print {
+                .no-print { display: none !important; }
+                body { background: #fff; margin: 0; }
+                .doc-container { width: 100%; max-width: none; padding: 0; }
+            }
         `;
 
-        // LOOP DOS ANOS LETIVOS (VIDA ACADÊMICA)
+        let html = `
+            <style>${css}</style>
+            <div class="doc-container">
+
+                <!-- Botoes de Ação -->
+                <div class="no-print" style="margin-bottom: 20px; text-align: right;">
+                    <button onclick="window.print()" style="padding: 8px 15px; cursor: pointer;">🖨️ Imprimir</button>
+                    <button onclick="window.App.navegar('dashboard')" style="padding: 8px 15px; cursor: pointer;">Voltar</button>
+                </div>
+
+                <!-- Cabeçalho Oficial -->
+                <div class="header">
+                    <div style="font-size: 40px; line-height: 1;">🏛️</div>
+                    <h1>Secretaria de Estado de Educação</h1>
+                    <h2>Histórico Escolar Oficial</h2>
+                </div>
+
+                <!-- Identificação do Aluno -->
+                <div class="section-title">DADOS DE IDENTIFICAÇÃO</div>
+                <table class="info-table">
+                    <tr>
+                        <td width="60%"><strong>Nome:</strong> ${safe(dados.cabecalho.nome)}</td>
+                        <td><strong>Nascimento:</strong> ${safe(dados.cabecalho.nascimento)}</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Filiação:</strong><br>${safe(dados.cabecalho.filiacao.mae)}<br>${safe(dados.cabecalho.filiacao.pai)}</td>
+                        <td>
+                            <strong>RG:</strong> ${safe(dados.cabecalho.rg)}<br>
+                            <strong>CPF:</strong> ${safe(dados.cabecalho.documento)}
+                        </td>
+                    </tr>
+                    <tr>
+                        <td colspan="2"><strong>Naturalidade:</strong> ${safe(dados.cabecalho.naturalidade)}</td>
+                    </tr>
+                </table>
+
+                <!-- Loop de Anos Letivos -->
+        `;
+
         dados.vidaAcademica.forEach(anoItem => {
             html += `
-                <div style="margin-top: 20px; page-break-inside: avoid;">
-                    <div style="background: #333; color: #fff; padding: 5px; font-weight: bold;">
-                        ANO LETIVO: ${anoItem.ano} | ${anoItem.escolaNome}
-                    </div>
-                    <div style="border: 1px solid #000; padding: 5px; font-size: 0.9em; margin-bottom: 5px;">
-                        Situação Final: <strong>${anoItem.situacaoFinal}</strong> | Turma: ${anoItem.turmaNome}
-                    </div>
+                <div class="section-title">
+                    ANO LETIVO: ${safe(anoItem.ano)} - ${safe(anoItem.serie.toUpperCase())}
+                    <span style="float:right; font-weight:normal;">${safe(anoItem.escolaNome)} (${safe(anoItem.cidade)})</span>
+                </div>
 
-                    <table style="${styleTable}">
-                        <thead>
-                            <tr>
-                                <th style="${styleTh} width: 60%;">Componente Curricular</th>
-                                <th style="${styleTh}">Média Final</th>
-                                <th style="${styleTh}">Total Faltas</th>
-                                <th style="${styleTh}">Resultado</th>
-                            </tr>
-                        </thead>
-                        <tbody>
+                <table class="grades-table">
+                    <thead>
+                        <tr>
+                            <th width="40%">Componente Curricular</th>
+                            <th width="15%">Área de Conhecimento</th>
+                            <th width="15%">Média Final</th>
+                            <th width="15%">Faltas</th>
+                            <th width="15%">Resultado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
             `;
 
-            anoItem.componentesCurriculares.forEach(comp => {
-                // Lógica simples de resultado por disciplina
-                const numMedia = parseFloat(comp.media);
-                const statusDisciplina = (isNaN(numMedia) || numMedia >= 5.0) ? "Aprovado" : "Reprovado";
-
-                html += `
-                    <tr>
-                        <td style="${styleTd} text-align: left; padding-left: 10px;">${comp.disciplina}</td>
-                        <td style="${styleTd} font-weight: bold;">${comp.media}</td>
-                        <td style="${styleTd}">${comp.totalFaltas}</td>
-                        <td style="${styleTd} font-size: 0.9em;">${statusDisciplina}</td>
-                    </tr>
-                `;
-            });
+            if (anoItem.componentesCurriculares.length === 0) {
+                html += `<tr><td colspan="5">Nenhum registro de notas encontrado para este período.</td></tr>`;
+            } else {
+                anoItem.componentesCurriculares.forEach(comp => {
+                    html += `
+                        <tr>
+                            <td class="left">${safe(comp.disciplina)}</td>
+                            <td>${safe(comp.area)}</td>
+                            <td><strong>${safe(comp.mediaFinal)}</strong></td>
+                            <td>${safe(comp.totalFaltas)}</td>
+                            <td>${safe(comp.resultado)}</td>
+                        </tr>
+                    `;
+                });
+            }
 
             html += `
-                        </tbody>
-                    </table>
+                    </tbody>
+                </table>
+                <div style="font-size: 11px; margin-bottom: 10px;">
+                    <strong>Situação Final:</strong> ${safe(anoItem.situacaoFinal)} |
+                    <strong>Dias Letivos:</strong> ${safe(anoItem.diasLetivos)} |
+                    <strong>Freq. Global:</strong> ${safe(anoItem.frequencia)} dias
                 </div>
             `;
         });
 
-        // RODAPÉ E ASSINATURAS
+        // Rodapé
         html += `
-                <div style="margin-top: 60px; display: flex; justify-content: space-between; text-align: center;">
-                    <div style="width: 45%;">
-                        __________________________________________<br>
+                <div class="signatures">
+                    <div style="width: 40%;">
+                        __________________________________<br>
                         <strong>Secretário(a) Escolar</strong><br>
-                        <small>Matrícula / Carimbo</small>
+                        Registro nº: _________
                     </div>
-                    <div style="width: 45%;">
-                        __________________________________________<br>
-                        <strong>Diretor(a) da Instituição</strong><br>
-                        <small>Decreto de Nomeação</small>
+                    <div style="width: 40%;">
+                        __________________________________<br>
+                        <strong>Diretor(a)</strong><br>
+                        Decreto de Nomeação
                     </div>
                 </div>
 
-                <div style="margin-top: 40px; font-size: 10px; text-align: center; border-top: 1px solid #ccc; padding-top: 10px;">
-                    Documento gerado eletronicamente pelo SGE Integrado em ${new Date().toLocaleDateString()} às ${new Date().toLocaleTimeString()}.
-                    <br>A autenticidade deste documento pode ser verificada no portal da Secretaria.
-                </div>
-
-                <div class="no-print" style="position: fixed; top: 20px; right: 20px;">
-                    <button onclick="window.print()" style="padding: 15px 30px; background: #2c3e50; color: white; border: none; cursor: pointer; font-size: 16px; border-radius: 5px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                        🖨️ Imprimir Histórico Oficial
-                    </button>
-                    <button onclick="window.App.navegar('dashboard')" style="padding: 15px 30px; background: #95a5a6; color: white; border: none; cursor: pointer; font-size: 16px; border-radius: 5px; margin-left: 10px;">
-                        Voltar
-                    </button>
+                <div class="timestamp">
+                    Documento gerado eletronicamente em ${new Date().toLocaleDateString()} às ${new Date().toLocaleTimeString()}.<br>
+                    Válido em todo território nacional sem emendas ou rasuras.
                 </div>
             </div>
-
-            <style>
-                @media print {
-                    .no-print { display: none !important; }
-                    body { background: white; }
-                    .sidebar { display: none; }
-                    .app-container { display: block; height: auto; }
-                    #main-content { padding: 0; overflow: visible; }
-                }
-            </style>
         `;
 
         container.innerHTML = html;
