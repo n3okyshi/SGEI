@@ -79,39 +79,26 @@ const RelatorioService = {
     },
     _calcularDesempenhoAtual: function (alunoId, disciplinaId) {
         const avaliacoes = DB.data.avaliacoes.filter(av =>
-            av.alunoId === alunoId &&
-            av.disciplinaId === disciplinaId
+            av.alunoId == alunoId &&
+            av.disciplinaId == disciplinaId
         );
         if (!avaliacoes || avaliacoes.length === 0) {
             return { media: "---", faltas: 0 };
         }
         let somaTotal = 0;
         let transferido = false;
-        try {
-            avaliacoes.forEach(av => {
-                if (av.tipo === 'Transferencia') {
-                    transferido = true;
-                }
-                if (av.valor) {
-                    somaTotal += Math.round(parseFloat(av.valor) * 100);
-                }
-            });
-            const bimestresAvaliados = new Set(avaliacoes.map(av => av.etapa)).size;
-            let mediaFinalCalculada = 0;
-            if (bimestresAvaliados > 0) {
-                mediaFinalCalculada = (somaTotal / 100) / bimestresAvaliados;
+        avaliacoes.forEach(av => {
+            if (av.tipo === 'Transferencia') {
+                transferido = true;
             }
-            const mediaFormatada = mediaFinalCalculada.toFixed(2);
-            const totalFaltasCalculadas = 0;
-            return {
-                media: transferido ? `${mediaFormatada}*` : mediaFormatada,
-                faltas: totalFaltasCalculadas,
-                isTransferencia: transferido
-            };
-        } catch (err) {
-            console.error(err);
-            return { media: "---", faltas: 0 };
-        }
+            somaTotal += Math.round(parseFloat(av.valor) * 100);
+        });
+        const mediaFinalCalculada = (somaTotal / 100) / avaliacoes.length;
+        const mediaFormatada = mediaFinalCalculada.toFixed(2);
+        return {
+            media: transferido ? `${mediaFormatada}*` : mediaFormatada,
+            faltas: 0
+        };
     },
     renderizarHTML: function (container, alunoId) {
         const dados = this.gerarHistoricoEscolar(alunoId);

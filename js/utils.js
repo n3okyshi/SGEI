@@ -7,18 +7,21 @@ class SafeHTML {
         return this.htmlText;
     }
 }
-
 const Utils = {
     escapeHtml: function (unsafe) {
-        if (unsafe === null || unsafe === undefined) return '';
-        return String(unsafe)
+        if (unsafe === null || unsafe === undefined) {
+            return unsafe;
+        }
+        if (typeof unsafe !== 'string') {
+            return unsafe;
+        }
+        return unsafe
             .replace(/&/g, "&amp;")
             .replace(/</g, "&lt;")
             .replace(/>/g, "&gt;")
             .replace(/"/g, "&quot;")
             .replace(/'/g, "&#039;");
     },
-
     html: function (strings, ...values) {
         let result = strings[0];
         for (let i = 0; i < values.length; i++) {
