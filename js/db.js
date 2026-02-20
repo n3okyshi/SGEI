@@ -1,39 +1,23 @@
-/**
- * JS/DB.JS - VERSÃO 0.0.1 
- * Suporte a histórico, filiação completa, ocorrências e calendário.
- */
-const DB_KEY = 'sgei_valpha'; // Nova chave para resetar estrutura antiga
-
+const DB_KEY = 'sgei_valpha';
 const DB = {
     data: {
         config: {
             anoLetivoAtual: 2026
         },
-        usuarios: [],     // Atores do sistema
-        escolas: [],      // Unidades
-        calendario: [],   // Feriados, dias letivos, eventos 
-        turmas: [],       // Classes
-        disciplinas: [],  // Matérias (Matemática, Hist...) 
-
-        // O Core do Aluno
-        alunos: [],       // Dados Pessoais (Imutáveis)
-        matriculas: [],   // Vínculo Aluno <-> Escola <-> Ano (Histórico de Vínculo)
-        historico: [],    // NOTAS FINAIS DE ANOS ANTERIORES (IMUTÁVEIS)
-        ocorrencias: [],  // Disciplinar 
-
-        // Pedagógico
-        planejamentos: [], // Planos de aula dos professores 
-        avaliacoes: [],    // Notas do ANO ATUAL
-        frequencia: [],    // Presença do ANO ATUAL
-        configAvaliacoes: [] // Regras de nota
+        usuarios: [],
+        escolas: [],
+        calendario: [],
+        turmas: [],
+        disciplinas: [],
+        alunos: [],
+        matriculas: [],
+        historico: [],
+        ocorrencias: [],
+        planejamentos: [],
+        avaliacoes: [],
+        frequencia: [],
+        configAvaliacoes: []
     },
-
-    /**
-     * Inicializa o banco de dados.
-     * Se houver dados salvos no localStorage, carrega-os.
-     * Caso contrário, popula o banco com dados iniciais.
-     * @returns {undefined}
-     */
     init: function () {
         const saved = localStorage.getItem(DB_KEY);
         if (saved) {
@@ -42,27 +26,11 @@ const DB = {
             this.seed();
         }
     },
-
-    /**
-     * Salva os dados do banco em localStorage.
-     * @returns {undefined}
-     */
     save: function () {
         localStorage.setItem(DB_KEY, JSON.stringify(this.data));
     },
-
-    /**
-     * Semeia o banco com dados complexos.
-     * Cria os dados de todos os módulos do sistema, incluindo
-     * os usuários, disciplinas, calendário, alunos, matrículas,
-     * ocorrências e planejamentos.
-     * Chama o método save() ao final para persistir os dados.
-     * @returns {undefined}
-     */
     seed: function () {
         console.log("[DB] Semeando dados...");
-
-        // 1. USUÁRIOS
         this.data.usuarios = [
             { id: 1, nome: "Admin Secretaria", login: "sec", senha: "123", role: "secretaria_geral" },
             { id: 2, nome: "Coord. Geral", login: "coord", senha: "123", role: "coordenacao" },
@@ -70,8 +38,6 @@ const DB = {
             { id: 4, nome: "Prof. Joaquim", login: "prof", senha: "123", role: "professor" },
             { id: 5, nome: "Joãozinho (Aluno)", login: "aluno", senha: "123", role: "aluno", alunoId: 1 }
         ];
-
-        // 2. DISCIPLINAS (Base Curricular)
         this.data.disciplinas = [
             { id: 'mat', nome: 'Matemática', area: 'Exatas' },
             { id: 'port', nome: 'Português', area: 'Linguagens' },
@@ -81,15 +47,11 @@ const DB = {
             { id: 'art', nome: 'Artes', area: 'Linguagens' },
             { id: 'ef', nome: 'Educação Física', area: 'Linguagens' }
         ];
-
-        // 3. CALENDÁRIO (Eventos globais e locais)
         this.data.calendario = [
-            { data: '2026-01-16', tipo: 'inicio_aulas', descricao: 'Início do Ano Letivo', escolaId: null }, // Null = Todas
+            { data: '2026-01-16', tipo: 'inicio_aulas', descricao: 'Início do Ano Letivo', escolaId: null },
             { data: '2026-04-21', tipo: 'feriado', descricao: 'Tiradentes', escolaId: null },
-            { data: '2026-06-20', tipo: 'evento', descricao: 'Festa Junina', escolaId: 1 } // Só na escola 1
+            { data: '2026-06-20', tipo: 'evento', descricao: 'Festa Junina', escolaId: 1 }
         ];
-
-        // 4. ALUNOS (Perfil Pessoal - Dados que não mudam com o ano)
         this.data.alunos = [
             {
                 id: 1,
@@ -106,19 +68,11 @@ const DB = {
                 rg: "3.333.333-SSP/DF"
             }
         ];
-
-        // 5. MATRÍCULAS (Onde ele estudou)
         this.data.matriculas = [
-            // 2024 - 6º Ano (Fundamental II)
             { id: 9, alunoId: 1, escolaId: 2, ano: 2024, turmaId: 98, status: 'APROVADO', etapa: 'Fundamental II', serie: '6º Ano' },
-            // 2025 - 7º Ano (Fundamental II)
             { id: 10, alunoId: 1, escolaId: 2, ano: 2025, turmaId: 99, status: 'APROVADO', etapa: 'Fundamental II', serie: '7º Ano' },
-            // 2026 - 8º Ano (Atual)
             { id: 11, alunoId: 1, escolaId: 1, ano: 2026, turmaId: 101, status: 'ATIVO', etapa: 'Fundamental II', serie: '8º Ano', dataMatricula: '2026-01-20' }
         ];
-
-        // 6. HISTÓRICO CONSOLIDADO (Anos Fechados)
-        // Dados imutáveis de anos anteriores para o Relatório Oficial
         this.data.historico = [
             {
                 alunoId: 1,
@@ -157,38 +111,25 @@ const DB = {
                 ]
             }
         ];
-
-        // 7. AVALIAÇÕES (Ano Atual - 2026)
-        // Notas parciais que vão compor o boletim do ano corrente
         this.data.avaliacoes = [
-            // Matemática - Bimestre 1
             { id: 1, alunoId: 1, disciplinaId: 'mat', etapa: 1, valor: "8.00", tipo: 'P1' },
             { id: 2, alunoId: 1, disciplinaId: 'mat', etapa: 1, valor: "7.00", tipo: 'Trabalho' },
-            // Português - Bimestre 1
             { id: 3, alunoId: 1, disciplinaId: 'port', etapa: 1, valor: "9.50", tipo: 'P1' }
         ];
-
         this.data.escolas = [
             { id: 1, nome: "Escola Modelo (Atual)", diretor: "Roberto", cidade: "Brasília-DF" },
             { id: 2, nome: "Escola Antiga (Legado)", diretor: "João", cidade: "Goiânia-GO" }
         ];
-
         this.data.turmas = [{ id: 101, nome: "8º A", ano: 2026, escolaId: 1 }];
-
         this.save();
     },
-
-    // Helper: Buscar matrícula ativa de um aluno
     getMatriculaAtiva: function (alunoId, ano) {
         return this.data.matriculas.find(m => m.alunoId == alunoId && m.ano == ano && m.status === 'ATIVO');
     },
-
-    // Método auxiliar para facilitar limpeza em testes
     reset: function () {
         localStorage.removeItem(DB_KEY);
         this.seed();
     }
 };
-
 DB.init();
 export default DB;

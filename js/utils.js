@@ -1,29 +1,49 @@
+
+class SafeHTML {
+    constructor(htmlText) {
+        this.htmlText = htmlText;
+    }
+    toString() {
+        return this.htmlText;
+    }
+}
+
 const Utils = {
-    /**
-     * Escapa os caracteres especiais HTML em uma string.
-     * Substitui "&" por "&amp;", "<" por "&lt;", ">" por "&gt;",
-     * '"' por "&quot;" e "'" por "&#039;".
-     * @param {string} text O texto a ser escapado.
-     * @returns {string} O texto com os caracteres especiais escapados.
-     */
-    escapeHtml: function (text) {
-        if (!text) return text;
-        if (typeof text !== 'string') return text;
-        const map = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#039;'
-        };
-        return text.replace(/[&<>"']/g, function (m) { return map[m]; });
+    escapeHtml: function (unsafe) {
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
     },
-    /**
-     * Formata uma data no formato "dd/mm/yyyy" para o formato
-     * local do Brasil "dd 'de' MMMM 'de' yyyy".
-     * @param {string} dateString A data a ser formatada.
-     * @returns {string} A data formatada.
-     */
+
+    html: function (strings, ...values) {
+        let result = strings[0];
+        for (let i = 0; i < values.length; i++) {
+            let val = values[i];
+            if (val === null || val === undefined) {
+                val = '';
+            }
+            else if (val instanceof SafeHTML) {
+                val = val.htmlText;
+            }
+            else if (Array.isArray(val)) {
+                val = val.map(v => v instanceof SafeHTML ? v.htmlText : Utils.escapeHtml(String(v))).join('');
+            }
+            else {
+                val = Utils.escapeHtml(String(val));
+            }
+            result += val + strings[i + 1];
+        }
+        return new SafeHTML(result);
+    },
+
+    raw: function (string) {
+        return new SafeHTML(string);
+    },
+
     formatDate: function (dateString) {
         if (!dateString) return "";
         return new Date(dateString).toLocaleDateString('pt-BR');

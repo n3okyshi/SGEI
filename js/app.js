@@ -1,24 +1,16 @@
-/**
- * JS/APP.JS
- * Cérebro da aplicação.
- * Gerencia a navegação, permissões e integra os módulos (Views).
- */
-
-// 1. IMPORTAÇÃO DOS MÓDULOS (VIEWS E UTILITÁRIOS)
 import DB from './db.js';
 import Auth from './auth.js';
 import Utils from './utils.js';
-
-// Views Específicas
+import LoginView from './views/login.js';
+import DashboardView from './views/dashboard.js';
+import FrequenciaView from './views/frequencia.js';
+import NotasView from './views/notas.js';
+import RelatorioService from './services/relatorio.js';
 import SecretariaView from './views/secretaria.js';
 import CoordenacaoView from './views/coordenacao.js';
-import ProfessorView from './views/professor.js';
 import AlunoView from './views/aluno.js';
 import MatriculaView from './views/matricula.js';
-
-// --- 2. CONFIGURAÇÃO DE MENUS (PERFIS DE ACESSO) ---
 const MENUS = {
-    // NÍVEL 1: ESTRATÉGICO (MUNICÍPIO)
     'secretaria_geral': [
         { icone: 'analytics', texto: 'Painel Municipal', acao: 'dashboard_sec' },
         { icone: 'domain', texto: 'Todas as Escolas', acao: 'lista_escolas' },
@@ -28,24 +20,21 @@ const MENUS = {
         { icone: 'visibility', texto: 'Transparência', acao: 'dashboard_conselho' },
         { icone: 'attach_money', texto: 'Prestação de Contas', acao: 'financeiro_view' }
     ],
-
-    // NÍVEL 2: TÁTICO (SUPERVISÃO E GESTÃO ESCOLAR)
     'supervisao': [
         { icone: 'dashboard', texto: 'Painel Supervisão', acao: 'dashboard_sup' },
         { icone: 'fact_check', texto: 'Fiscalização', acao: 'fiscalizacao' }
     ],
-    'gestao': [ // Diretor e Secretário Escolar
+    'gestao': [
         { icone: 'dashboard', texto: 'Painel da Escola', acao: 'dashboard' },
         { icone: 'school', texto: 'Gerir Turmas', acao: 'turmas' },
         { icone: 'person_add', texto: 'Matrículas', acao: 'matriculas' },
         { icone: 'group', texto: 'Corpo Docente', acao: 'professores' }
     ],
-
-    // NÍVEL 3: OPERACIONAL PEDAGÓGICO
     'coordenacao': [
         { icone: 'dashboard', texto: 'Painel Pedagógico', acao: 'dashboard' },
         { icone: 'rule', texto: 'Config. Avaliações', acao: 'config_avaliacoes' },
-        { icone: 'assignment_turned_in', texto: 'Aprovar Notas', acao: 'aprovar_notas' }
+        { icone: 'assignment_turned_in', texto: 'Aprovar Notas', acao: 'aprovar_notas' },
+        { icone: 'group', texto: 'Enturmação', acao: 'enturmacao' }
     ],
     'professor': [
         { icone: 'home', texto: 'Minhas Turmas', acao: 'dashboard' },
@@ -53,275 +42,208 @@ const MENUS = {
         { icone: 'edit_calendar', texto: 'Frequência', acao: 'frequencia' },
         { icone: 'grade', texto: 'Lançar Notas', acao: 'notas' }
     ],
-
-    // NÍVEL 4: USUÁRIO FINAL
     'aluno': [
         { icone: 'person', texto: 'Meu Perfil', acao: 'perfil_aluno' },
         { icone: 'table_chart', texto: 'Meu Boletim', acao: 'boletim' },
-        { icone: 'event', texto: 'Minha Frequência', acao: 'frequencia_aluno' }
+        { icone: 'event', texto: 'Minha Frequência', acao: 'frequencia_aluno' },
+        { icone: 'history_edu', texto: 'Histórico Completo', acao: 'historico_aluno' }
     ]
 };
-
 const App = {
-
-    // --- 3. INICIALIZAÇÃO ---
     init: function () {
-        // Expondo Singletons para acesso global
+        window.MENUS = MENUS;
         window.DB = DB;
         window.Auth = Auth;
+        window.Utils = Utils;
+        window.LoginView = LoginView;
+        window.DashboardView = DashboardView;
+        window.FrequenciaView = FrequenciaView;
+        window.NotasView = NotasView;
+        window.RelatorioService = RelatorioService;
         window.SecretariaView = SecretariaView;
         window.CoordenacaoView = CoordenacaoView;
-        window.ProfessorView = ProfessorView;
         window.AlunoView = AlunoView;
         window.MatriculaView = MatriculaView;
         window.App = this;
-
-        // Verifica autenticação inicial
-        this.navegar(Auth.user ? 'dashboard' : 'login');
+        const usuarioLogado = Auth.getUsuarioLogado ? Auth.getUsuarioLogado() : Auth.user;
+        this.navegar(usuarioLogado ? 'dashboard' : 'login');
     },
-
-    // --- 4. ROTEADOR (NAVIGATOR) ---
     navegar: function (tela) {
-        const main = document.getElementById('main-content');
-        const user = Auth.user;
-
-        // 4.1 Proteção de Rota
-        if (!user && tela !== 'login') {
-            this.renderLogin(main);
-            return;
-        }
-
-        // 4.2 Controle da Sidebar
-        if (tela !== 'login') {
-            document.getElementById('sidebar').classList.remove('hidden');
-            this.renderMenu(user);
-            document.getElementById('user-role-display').innerText =
-                `${Utils.escapeHtml(user.nome)} (${user.role.toUpperCase()})`;
-        } else {
-            document.getElementById('sidebar').classList.add('hidden');
-        }
-
-        main.innerHTML = '';
-
-        // 4.3 Switch de Telas
-        switch (tela) {
-            case 'login':
-                this.renderLogin(main);
-                break;
-
-            // --- ROTAS GERAIS ---
-            case 'dashboard':
-                this.renderDashboard(main, user);
-                break;
-
-            // --- ROTAS DA SECRETARIA ---
-            case 'dashboard_sec':
-                SecretariaView.renderDashboard(main);
-                break;
-            case 'lista_escolas':
-                SecretariaView.renderDashboard(main);
-                setTimeout(() => SecretariaView.renderListaEscolas(), 50);
-                break;
-
-            // --- ROTAS DA COORDENAÇÃO ---
-            case 'config_avaliacoes':
-                CoordenacaoView.renderConfigAvaliacoes(main);
-                break;
-
-            // --- ROTAS DO PROFESSOR ---
-            case 'notas':
-                ProfessorView.renderNotas(main, user);
-                break;
-
-            // --- ROTAS DO ALUNO ---
-            case 'boletim':
-                AlunoView.renderBoletim(main, user);
-                break;
-
-            case 'matriculas':
-                MatriculaView.renderPainel(main);
-                break;
-
-            // --- ROTAS EM DESENVOLVIMENTO ---
-            case 'turmas':
-            case 'professores':
-            case 'frequencia':
-            case 'planejamento':
-            case 'fiscalizacao':
-            case 'financeiro_view':
-            case 'relatorios':
-            case 'aprovar_notas':
-                this.renderEmConstrucao(main, tela);
-                break;
-
-            default:
-                main.innerHTML = `<h1>404</h1><p>Tela não encontrada: ${Utils.escapeHtml(tela)}</p>`;
+        try {
+            const main = document.getElementById('main-content');
+            const user = Auth.getUsuarioLogado ? Auth.getUsuarioLogado() : Auth.user;
+            if (!user && tela !== 'login') {
+                return LoginView.render(main);
+            }
+            const sidebar = document.getElementById('sidebar');
+            if (tela !== 'login' && user) {
+                sidebar.classList.remove('hidden');
+                this.renderMenu(user);
+                document.getElementById('user-role-display').innerText =
+                    `${Utils.escapeHtml(user.nome)} (${this._formatarRole(user.role)})`;
+            } else {
+                sidebar.classList.add('hidden');
+            }
+            main.innerHTML = '';
+            switch (tela) {
+                case 'login':
+                    return LoginView.render(main);
+                case 'dashboard':
+                    return DashboardView.render(main);
+                case 'frequencia':
+                    return FrequenciaView.render(main);
+                case 'notas':
+                    return NotasView.render(main);
+                case 'historico_aluno':
+                    return RelatorioService.renderizarHTML(main, user.alunoId);
+                case 'relatorio_busca':
+                    return RelatorioService.renderizarHTML(main, 1);
+                case 'dashboard_sec':
+                case 'lista_escolas':
+                    return window.SecretariaView ? SecretariaView.renderDashboard(main) : this.renderEmConstrucao(main, tela);
+                case 'config_avaliacoes':
+                case 'coordenacao':
+                    return window.CoordenacaoView ? CoordenacaoView.renderConfigAvaliacoes(main) : this.renderEmConstrucao(main, tela);
+                case 'boletim':
+                case 'aluno':
+                    return window.AlunoView ? AlunoView.renderBoletim(main, user) : this.renderEmConstrucao(main, tela);
+                case 'matriculas':
+                case 'matricula':
+                    return window.MatriculaView ? MatriculaView.renderPainel(main) : this.renderEmConstrucao(main, tela);
+                default:
+                    return main.innerHTML = `
+                    <div class="alert alert-error">
+                        <h2>404</h2>
+                        <p>Tela ou Rota não encontrada: <strong>${Utils.escapeHtml(tela)}</strong></p>
+                        <button onclick="App.navegar('dashboard')">Voltar ao Início</button>
+                    </div>`;
+            }
+        } catch (error) {
+            console.error('Erro ao navegar para a rota "' + tela + '":', error);
         }
     },
-
-    /**
-     * Realiza um login demostrativo com o usuário e senha passados como parâmetro.
-     * Preenche os campos de usuário e senha com os valores passados e chama a função de login.
-     * @param {string} usuario - O nome de usuário para login.
-     * @param {string} senha - A senha do usuário para login.
-     */
+    renderMenu: function (user) {
+        const listaMenu = document.querySelector('#sidebar .menu');
+        if (!listaMenu) throw new Error('Erro ao renderizar menu: listaMenu não encontrada.');
+        listaMenu.innerHTML = MENUS[user.role]
+            .map(item => `<li class="${item.classe || ''}" data-acao="${item.acao}"><span class="material-icons">${item.icone}</span> ${item.texto}</li>`)
+            .join('');
+        listaMenu.innerHTML += `<li class="logout" data-acao="logout"><span class="material-icons">logout</span> Sair</li>`;
+        listaMenu.querySelectorAll('li.logout').forEach(li => li.onclick = () => {
+            try {
+                if (!Auth.logout()) throw new Error('Erro ao sair do sistema');
+                this.navegar('login');
+            } catch (error) {
+                console.error('Erro ao sair do sistema:', error);
+            }
+        });
+        listaMenu.querySelectorAll('li:not(.logout)').forEach(li => li.onclick = () => {
+            try {
+                if (!li.dataset.acao || typeof li.dataset.acao !== 'string') throw new Error(`Erro ao navegar para a rota: li.dataset.acao não é uma string válida`);
+                this.navegar(li.dataset.acao);
+            } catch (error) {
+                console.error('Erro ao navegar para a rota "' + li.dataset.acao + '":', error);
+            }
+        });
+    },
+    renderEmConstrucao: function (container, tela) {
+        if (!container || !tela) {
+            throw new Error('renderEmConstrucao: container e tela são obrigatórios');
+        }
+        if (typeof container !== 'object' || !(container instanceof HTMLElement)) {
+            throw new TypeError('renderEmConstrucao: container deve ser um objeto HTMLElement');
+        }
+        if (typeof tela !== 'string') {
+            throw new TypeError('renderEmConstrucao: tela deve ser uma string');
+        }
+        try {
+            const html = `
+                <div class="card" style="text-align: center; padding: 50px; margin-top: 20px;">
+                    <div style="font-size: 60px; margin-bottom: 20px;">🚧</div>
+                    <h2>Módulo em Desenvolvimento</h2>
+                    <p>A rota <strong>${Utils.escapeHtml(tela)}</strong> será entregue no próximo Sprint.</p>
+                    <br>
+                    <button class="btn" onclick="App.navegar('dashboard')" style="padding: 10px 20px; cursor: pointer;">Voltar ao Início</button>
+                </div>
+            `;
+            container.innerHTML = html;
+        } catch (error) {
+            console.error('Erro ao renderizar tela em construção:', error);
+        }
+    },
+    _formatarRole: function (role) {
+        if (typeof role !== 'string') {
+            throw new TypeError('_formatarRole: role deve ser uma string');
+        }
+        if (!role) {
+            throw new Error('_formatarRole: role não pode ser nulo ou undefined');
+        }
+        const papeis = {
+            'secretaria_geral': 'Sec. Educação',
+            'coordenacao': 'Coordenação',
+            'gestao': 'Direção',
+            'professor': 'Professor',
+            'aluno': 'Aluno'
+        };
+        if (!papeis.hasOwnProperty(role)) {
+            throw new Error(`_formatarRole: role '${role}' não é um papel válido`);
+        }
+        return papeis[role];
+    },
     demoLogin: function (usuario, senha) {
-        // Verifica se os parâmetros são válidos
+        if (typeof usuario !== 'string' || typeof senha !== 'string') {
+            throw new TypeError('demoLogin: usuario e senha devem ser strings');
+        }
         if (!usuario || !senha) {
             throw new Error('demoLogin: usuario e senha são obrigatórios');
         }
-
-        // Preenche os inputs para UX visual
-        const inputUser = document.getElementById('loginUser');
-        const inputPass = document.getElementById('loginPass');
+        const inputUser = document.getElementById('loginUser') || document.getElementById('inputLogin');
+        const inputPass = document.getElementById('loginPass') || document.getElementById('inputSenha');
         if (!inputUser || !inputPass) {
-            throw new Error('demoLogin: Campos de usuário e senha não encontrados');
+            throw new ReferenceError('demoLogin: Campos de usuário e senha não encontrados');
         }
-
-        inputUser.value = usuario;
-        inputPass.value = senha;
-
-        // Chama a função de login injetando os parâmetros
         try {
+            inputUser.value = usuario;
+            inputPass.value = senha;
             Auth.login(usuario, senha);
+            this.navegar('dashboard');
         } catch (err) {
-            throw new Error(`demoLogin: Falha ao realizar login. ${err}`);
+            if (err instanceof ReferenceError || err instanceof TypeError || err instanceof Error) {
+                throw err;
+            } else {
+                console.error(`demoLogin: Falha ao realizar login. ${err}`);
+            }
         }
     },
-
-    /**
-     * Trata o evento de login, realizando a autenticação do usuário e gerenciando um erro
-     * caso os campos de usuário e senha estejam em branco ou inexistentes.
-     * @throws {Error} - Caso os campos de usuário e senha estejam em branco ou inexistentes.
-     */
     handleLogin: function () {
         try {
-            const userInput = document.getElementById('loginUser');
-            const passInput = document.getElementById('loginPass');
-
+            const userInput = document.getElementById('loginUser') || document.getElementById('inputLogin');
+            const passInput = document.getElementById('loginPass') || document.getElementById('inputSenha');
             if (!userInput || !passInput) {
-                throw new Error('handleLogin: Campos de usuário e senha não encontrados');
+                throw new ReferenceError('handleLogin: Campos de usuário e senha não encontrados');
             }
-
-            const usuario = userInput.value;
-            const senha = passInput.value;
-
-            if (!usuario || !senha) {
+            if (userInput === null || passInput === null) {
+                throw new TypeError('handleLogin: userInput e passInput não podem ser null');
+            }
+            const usuario = userInput.value.trim();
+            const senha = passInput.value.trim();
+            if (usuario === '' || senha === '') {
                 throw new Error('handleLogin: Usuário e senha são obrigatórios');
             }
-
-            Auth.login(usuario, senha);
-        } catch (err) {
-            console.error(`handleLogin: Falha ao realizar login. ${err}`);
-        }
-    },
-
-    // --- 5. RENDERIZADORES AUXILIARES ---
-
-    /**
-     * Renderiza o menu lateral com base na role do usuário.
-     * @param {Object} user - O usuário atual.
-     */
-    renderMenu: function (user) {
-        const listaMenu = document.querySelector('#sidebar .menu');
-        listaMenu.innerHTML = '';
-
-        const itens = [...(MENUS[user.role] || [])];
-        itens.push({ icone: 'logout', texto: 'Sair', acao: 'logout', classe: 'logout' });
-
-        itens.forEach(item => {
-            const li = document.createElement('li');
-            if (item.classe) li.classList.add(item.classe);
-            li.innerHTML = `<span class="material-icons">${item.icone}</span> ${item.texto}`;
-
-            if (item.acao === 'logout') {
-                li.onclick = () => Auth.logout();
-            } else {
-                li.onclick = () => this.navegar(item.acao);
+            if (typeof usuario !== 'string' || typeof senha !== 'string') {
+                throw new TypeError('handleLogin: usuario e senha devem ser strings');
             }
-            listaMenu.appendChild(li);
-        });
-    },
-
-    /**
-     * Renderiza a tela de login com campos de usuário e senha,
-     * juntamente com botões de clique rápido para acesso rápido.
-     * @param {Element} container - O elemento que irá conter a tela de login.
-     */
-    renderLogin: function (container) {
-        // Agora com botões de clique rápido
-        container.innerHTML = `
-            <div class="card" style="max-width: 400px; margin: 100px auto; text-align: center;">
-                <div style="font-size: 60px; margin-bottom: 20px;">🎓</div>
-                <h2>SGE Integrado</h2>
-                <p style="color: #666; margin-bottom: 20px;">Sistema de Gestão Educacional</p>
-                
-                <input type="text" id="loginUser" placeholder="Usuário" style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px;">
-                <input type="password" id="loginPass" placeholder="Senha" style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px;">
-                
-                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="App.handleLogin()">ENTRAR</button>
-                
-                <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 4px; font-size: 0.8em; text-align: left; color: #555;">
-                    <strong>Acesso Rápido (Demo):</strong>
-                    <div style="display:grid; gap: 5px; margin-top: 10px;">
-                        <button onclick="App.demoLogin('sec', '123')" style="cursor:pointer; padding:5px; border:1px solid #ddd; background:white;">🏛️ Secretaria (sec)</button>
-                        <button onclick="App.demoLogin('coord', '123')" style="cursor:pointer; padding:5px; border:1px solid #ddd; background:white;">📚 Coordenação (coord)</button>
-                        <button onclick="App.demoLogin('prof', '123')" style="cursor:pointer; padding:5px; border:1px solid #ddd; background:white;">👩‍🏫 Professor (prof)</button>
-                        <button onclick="App.demoLogin('aluno', '123')" style="cursor:pointer; padding:5px; border:1px solid #ddd; background:white;">🎒 Aluno (aluno)</button>
-                        <button onclick="App.demoLogin('dir', '123')" style="cursor:pointer; padding:5px; border:1px solid #ddd; background:white;">👔 Diretor (dir)</button>
-                    </div>
-                </div>
-            </div>
-        `;
-    },
-
-    /**
-     * Renderiza a tela de dashboard para o usuário logado.
-     * A tela de dashboard varia de acordo com o papel do usuário.
-     * @param {Element} container - O elemento que irá conter a tela de dashboard.
-     * @param {Object} user - O usuário atual, com informações de nome e papel.
-     */
-
-    renderDashboard: function (container, user) {
-        let titulo = 'Bem-vindo(a)';
-        let subtitulo = 'Selecione uma opção no menu lateral.';
-
-        if (user.role === 'gestao') titulo = 'Painel da Gestão Escolar';
-        if (user.role === 'professor') titulo = 'Sala dos Professores Virtual';
-        if (user.role === 'aluno') titulo = 'Portal do Aluno';
-        if (user.role === 'secretaria_geral') titulo = 'Gabinete da Secretaria';
-
-        container.innerHTML = `
-            <h1>${titulo}</h1>
-            <p>${subtitulo}</p>
-            
-            <div class="card" style="margin-top: 20px;">
-                <h3>Status do Sistema</h3>
-                <p>Base de dados local ativa.</p>
-                <button class="btn" onclick="DB.downloadBackup()">⬇️ Baixar Backup (JSON)</button>
-            </div>
-        `;
-    },
-
-    /**
-     * Renderiza a tela de "Em Construção" para o módulo informado.
-     * @param {Element} container - O elemento que irá conter a tela de "Em Construção".
-     * @param {string} tela - O nome do módulo que está em construção.
-     */
-    renderEmConstrucao: function (container, tela) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 50px;">
-                <span class="material-icons" style="font-size: 60px; color: #f39c12;">engineering</span>
-                <h1>Funcionalidade em Desenvolvimento</h1>
-                <p>O módulo <strong>${Utils.escapeHtml(tela)}</strong> será implementado na próxima etapa.</p>
-                <br>
-                <button class="btn" onclick="App.navegar('dashboard')">Voltar ao Início</button>
-            </div>
-        `;
+            Auth.login(usuario, senha);
+            this.navegar('dashboard');
+        } catch (err) {
+            if (err instanceof ReferenceError || err instanceof TypeError || err instanceof Error) {
+                console.error(`handleLogin: Falha ao realizar login. ${err}`);
+            } else {
+                throw err;
+            }
+        }
     }
 };
-
-// Inicializador
 document.addEventListener('DOMContentLoaded', () => {
     App.init();
 });

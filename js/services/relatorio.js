@@ -1,21 +1,12 @@
 import DB from '../db.js';
 import Utils from '../utils.js';
-
 const RelatorioService = {
-
-    /**
-     * GERA O OBJETO DE DADOS ESTRUTURADOS PARA O HISTÓRICO ESCOLAR.
-     * Cruza: Aluno + Matrículas (Histórico) + Avaliações + Disciplinas + Escolas + Histórico Imutável.
-     * Objetivo: Garantir integridade dos dados de ponta a ponta.
-     */
     gerarHistoricoEscolar: function (alunoId) {
         const aluno = DB.data.alunos.find(a => a.id == alunoId);
         if (!aluno) {
             console.error("Aluno não encontrado para ID:", alunoId);
             return null;
         }
-
-        // 1. DADOS CADASTRAIS (IMUTÁVEIS)
         const historico = {
             cabecalho: {
                 nome: aluno.nome,
@@ -28,13 +19,9 @@ const RelatorioService = {
             },
             vidaAcademica: []
         };
-
-        // 2. RECUPERAR HISTÓRICO PASSADO (IMUTÁVEL - ANOS FECHADOS)
         const historicoPassado = DB.data.historico ? DB.data.historico.filter(h => h.alunoId == alunoId) : [];
-
         historicoPassado.forEach(registro => {
             const escola = DB.data.escolas.find(e => e.id == registro.escolaId);
-
             const dadosAno = {
                 ano: registro.ano,
                 escolaNome: escola ? escola.nome : "Escola Legada/Externa",
@@ -45,8 +32,6 @@ const RelatorioService = {
                 frequencia: registro.frequenciaGlobal || 0,
                 componentesCurriculares: []
             };
-
-            // Mapeia as notas salvas no histórico imutável
             if (registro.notas && Array.isArray(registro.notas)) {
                 registro.notas.forEach(nota => {
                     const disciplina = DB.data.disciplinas.find(d => d.id === nota.disciplinaId);
@@ -54,41 +39,31 @@ const RelatorioService = {
                         dadosAno.componentesCurriculares.push({
                             disciplina: disciplina.nome,
                             area: disciplina.area || 'Diversificada',
-                            mediaFinal: nota.mediaFinal, // Já deve vir formatado "XX.XX" do DB
+                            mediaFinal: nota.mediaFinal,
                             totalFaltas: nota.faltas,
                             resultado: parseFloat(nota.mediaFinal) >= 5.0 ? "Aprovado" : "Reprovado"
                         });
                     }
                 });
             }
-
             historico.vidaAcademica.push(dadosAno);
         });
-
-        // 3. RECUPERAR ANO VIGENTE (DADOS DINÂMICOS - 2026)
-        // Busca matrícula ativa
         const matriculaAtual = DB.data.matriculas.find(m => m.alunoId == alunoId && m.ano == DB.data.config.anoLetivoAtual);
-
         if (matriculaAtual) {
             const escolaAtual = DB.data.escolas.find(e => e.id == matriculaAtual.escolaId);
             const turmaAtual = DB.data.turmas.find(t => t.id == matriculaAtual.turmaId);
-
             const dadosAnoAtual = {
                 ano: matriculaAtual.ano,
                 escolaNome: escolaAtual ? escolaAtual.nome : "Escola Atual",
                 cidade: escolaAtual ? escolaAtual.cidade : "Brasília-DF",
                 serie: matriculaAtual.serie || "Série Atual",
                 situacaoFinal: "EM CURSO",
-                diasLetivos: 200, // Previsão
+                diasLetivos: 200,
                 frequencia: "---",
                 componentesCurriculares: []
             };
-
-            // Calcular notas parciais baseadas nas avaliações lançadas
             DB.data.disciplinas.forEach(disciplina => {
                 const desempenho = this._calcularDesempenhoAtual(alunoId, disciplina.id);
-
-                // Só exibe se tiver nota lançada ou se for disciplina obrigatória
                 dadosAnoAtual.componentesCurriculares.push({
                     disciplina: disciplina.nome,
                     area: disciplina.area || 'Diversificada',
@@ -97,60 +72,54 @@ const RelatorioService = {
                     resultado: desempenho.media !== "---" ? (parseFloat(desempenho.media) >= 5.0 ? "Parcial: Aprov." : "Parcial: Reprov.") : "Em Curso"
                 });
             });
-
             historico.vidaAcademica.push(dadosAnoAtual);
         }
-
-        // Ordenação Cronológica Final
         historico.vidaAcademica.sort((a, b) => a.ano - b.ano);
-
         return historico;
     },
-
-    /**
-     * HELPER: Calcula a nota parcial do ano vigente.
-     */
     _calcularDesempenhoAtual: function (alunoId, disciplinaId) {
         const avaliacoes = DB.data.avaliacoes.filter(av =>
-            av.alunoId == alunoId &&
-            av.disciplinaId == disciplinaId
+            av.alunoId === alunoId &&
+            av.disciplinaId === disciplinaId
         );
-
         if (!avaliacoes || avaliacoes.length === 0) {
             return { media: "---", faltas: 0 };
         }
-
-        let soma = 0;
-        let contador = 0;
-
-        avaliacoes.forEach(av => {
-            soma += parseFloat(av.valor);
-            contador++;
-        });
-
-        const media = (soma / contador); // Média aritmética simples por enquanto (TODO: Implementar pesos)
-
-        return {
-            media: media.toFixed(2),
-            faltas: 0 // TODO: Implementar lógica de faltas futura
-        };
+        let somaTotal = 0;
+        let transferido = false;
+        try {
+            avaliacoes.forEach(av => {
+                if (av.tipo === 'Transferencia') {
+                    transferido = true;
+                }
+                if (av.valor) {
+                    somaTotal += Math.round(parseFloat(av.valor) * 100);
+                }
+            });
+            const bimestresAvaliados = new Set(avaliacoes.map(av => av.etapa)).size;
+            let mediaFinalCalculada = 0;
+            if (bimestresAvaliados > 0) {
+                mediaFinalCalculada = (somaTotal / 100) / bimestresAvaliados;
+            }
+            const mediaFormatada = mediaFinalCalculada.toFixed(2);
+            const totalFaltasCalculadas = 0;
+            return {
+                media: transferido ? `${mediaFormatada}*` : mediaFormatada,
+                faltas: totalFaltasCalculadas,
+                isTransferencia: transferido
+            };
+        } catch (err) {
+            console.error(err);
+            return { media: "---", faltas: 0 };
+        }
     },
-
-    /**
-     * RENDERIZA O DOCUMENTO OFICIAL PARA IMPRESSÃO.
-     */
     renderizarHTML: function (container, alunoId) {
         const dados = this.gerarHistoricoEscolar(alunoId);
-
         if (!dados) {
             container.innerHTML = `<div class="alert alert-error">Erro ao gerar histórico. Aluno não encontrado.</div>`;
             return;
         }
-
-        // Helper para sanitizar strings (XSS Prevention)
         const safe = (str) => Utils.escapeHtml(String(str || ""));
-
-        // Estilos Inline para garantir impressão perfeita (A4)
         const css = `
             .doc-container { font-family: 'Times New Roman', serif; max-width: 210mm; margin: 0 auto; padding: 20px; background: white; color: black; }
             .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
@@ -165,32 +134,24 @@ const RelatorioService = {
             .grades-table td.left { text-align: left; }
             .signatures { margin-top: 50px; display: flex; justify-content: space-around; text-align: center; font-size: 11px; }
             .timestamp { font-size: 9px; text-align: right; margin-top: 10px; border-top: 1px solid #ccc; padding-top: 2px; }
-            
             @media print {
                 .no-print { display: none !important; }
                 body { background: #fff; margin: 0; }
                 .doc-container { width: 100%; max-width: none; padding: 0; }
             }
         `;
-
         let html = `
             <style>${css}</style>
             <div class="doc-container">
-                
-                <!-- Botoes de Ação -->
                 <div class="no-print" style="margin-bottom: 20px; text-align: right;">
                     <button onclick="window.print()" style="padding: 8px 15px; cursor: pointer;">🖨️ Imprimir</button>
                     <button onclick="window.App.navegar('dashboard')" style="padding: 8px 15px; cursor: pointer;">Voltar</button>
                 </div>
-
-                <!-- Cabeçalho Oficial -->
                 <div class="header">
                     <div style="font-size: 40px; line-height: 1;">🏛️</div>
                     <h1>Secretaria de Estado de Educação</h1>
                     <h2>Histórico Escolar Oficial</h2>
                 </div>
-
-                <!-- Identificação do Aluno -->
                 <div class="section-title">DADOS DE IDENTIFICAÇÃO</div>
                 <table class="info-table">
                     <tr>
@@ -208,17 +169,13 @@ const RelatorioService = {
                         <td colspan="2"><strong>Naturalidade:</strong> ${safe(dados.cabecalho.naturalidade)}</td>
                     </tr>
                 </table>
-
-                <!-- Loop de Anos Letivos -->
         `;
-
         dados.vidaAcademica.forEach(anoItem => {
             html += `
                 <div class="section-title">
                     ANO LETIVO: ${safe(anoItem.ano)} - ${safe(anoItem.serie.toUpperCase())} 
                     <span style="float:right; font-weight:normal;">${safe(anoItem.escolaNome)} (${safe(anoItem.cidade)})</span>
                 </div>
-                
                 <table class="grades-table">
                     <thead>
                         <tr>
@@ -231,7 +188,6 @@ const RelatorioService = {
                     </thead>
                     <tbody>
             `;
-
             if (anoItem.componentesCurriculares.length === 0) {
                 html += `<tr><td colspan="5">Nenhum registro de notas encontrado para este período.</td></tr>`;
             } else {
@@ -247,7 +203,6 @@ const RelatorioService = {
                     `;
                 });
             }
-
             html += `
                     </tbody>
                 </table>
@@ -258,8 +213,6 @@ const RelatorioService = {
                 </div>
             `;
         });
-
-        // Rodapé
         html += `
                 <div class="signatures">
                     <div style="width: 40%;">
@@ -273,16 +226,13 @@ const RelatorioService = {
                         Decreto de Nomeação
                     </div>
                 </div>
-
                 <div class="timestamp">
                     Documento gerado eletronicamente em ${new Date().toLocaleDateString()} às ${new Date().toLocaleTimeString()}.<br>
                     Válido em todo território nacional sem emendas ou rasuras.
                 </div>
             </div>
         `;
-
         container.innerHTML = html;
     }
 };
-
 export default RelatorioService;
