@@ -159,13 +159,61 @@ const App = {
         }
     },
 
-    // --- NOVA FUNÇÃO: LOGIN RÁPIDO (DEMO) ---
+    /**
+     * Realiza um login demostrativo com o usuário e senha passados como parâmetro.
+     * Preenche os campos de usuário e senha com os valores passados e chama a função de login.
+     * @param {string} usuario - O nome de usuário para login.
+     * @param {string} senha - A senha do usuário para login.
+     */
     demoLogin: function (usuario, senha) {
-        // Preenche os inputs
-        document.getElementById('loginUser').value = usuario;
-        document.getElementById('loginPass').value = senha;
-        // Chama o login real
-        Auth.login();
+        // Verifica se os parâmetros são válidos
+        if (!usuario || !senha) {
+            throw new Error('demoLogin: usuario e senha são obrigatórios');
+        }
+
+        // Preenche os inputs para UX visual
+        const inputUser = document.getElementById('loginUser');
+        const inputPass = document.getElementById('loginPass');
+        if (!inputUser || !inputPass) {
+            throw new Error('demoLogin: Campos de usuário e senha não encontrados');
+        }
+
+        inputUser.value = usuario;
+        inputPass.value = senha;
+
+        // Chama a função de login injetando os parâmetros
+        try {
+            Auth.login(usuario, senha);
+        } catch (err) {
+            throw new Error(`demoLogin: Falha ao realizar login. ${err}`);
+        }
+    },
+
+    /**
+     * Trata o evento de login, realizando a autenticação do usuário e gerenciando um erro
+     * caso os campos de usuário e senha estejam em branco ou inexistentes.
+     * @throws {Error} - Caso os campos de usuário e senha estejam em branco ou inexistentes.
+     */
+    handleLogin: function () {
+        try {
+            const userInput = document.getElementById('loginUser');
+            const passInput = document.getElementById('loginPass');
+
+            if (!userInput || !passInput) {
+                throw new Error('handleLogin: Campos de usuário e senha não encontrados');
+            }
+
+            const usuario = userInput.value;
+            const senha = passInput.value;
+
+            if (!usuario || !senha) {
+                throw new Error('handleLogin: Usuário e senha são obrigatórios');
+            }
+
+            Auth.login(usuario, senha);
+        } catch (err) {
+            console.error(`handleLogin: Falha ao realizar login. ${err}`);
+        }
     },
 
     // --- 5. RENDERIZADORES AUXILIARES ---
@@ -211,7 +259,7 @@ const App = {
                 <input type="text" id="loginUser" placeholder="Usuário" style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px;">
                 <input type="password" id="loginPass" placeholder="Senha" style="width: 100%; padding: 12px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px;">
                 
-                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="Auth.login()">ENTRAR</button>
+                <button class="btn" style="width: 100%; margin-top: 10px;" onclick="App.handleLogin()">ENTRAR</button>
                 
                 <div style="margin-top: 30px; padding: 15px; background: #f8f9fa; border-radius: 4px; font-size: 0.8em; text-align: left; color: #555;">
                     <strong>Acesso Rápido (Demo):</strong>

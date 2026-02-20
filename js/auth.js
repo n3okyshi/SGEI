@@ -15,29 +15,35 @@ const Auth = {
         }
     },
 
-    /**
+/**
      * Faz o login no sistema.
-     * Pega os valores dos inputs de login e senha, busca no DB e, se encontrado,
-     * salva na sess o e no estado atual. Se n o encontrado, mostra uma mensagem de erro.
-     * Se o App estiver dispon vel, navega para o dashboard.
+     * @param {string} username - O login do usuário.
+     * @param {string} password - A senha do usuário.
+     * @returns {boolean} - Retorna true se o login for bem-sucedido, false caso contrário.
      */
-    login: function () {
-        // Pega valores dos inputs
-        const userInput = document.getElementById('loginUser').value;
-        const passInput = document.getElementById('loginPass').value;
+    login: function (username, password) {
+        try {
+            // Busca no DB
+            const usuarioEncontrado = DB.data.usuarios.find(u => u.login === username && u.senha === password);
 
-        // Busca no DB
-        const usuarioEncontrado = DB.data.usuarios.find(u => u.login === userInput && u.senha === passInput);
+            if (usuarioEncontrado !== undefined && usuarioEncontrado !== null) {
+                // Salva na sessão e no estado atual
+                sessionStorage.setItem('usuarioLogado', JSON.stringify(usuarioEncontrado));
+                this.user = usuarioEncontrado;
 
-        if (usuarioEncontrado) {
-            // Salva na sessão e no estado atual
-            sessionStorage.setItem('usuarioLogado', JSON.stringify(usuarioEncontrado));
-            this.user = usuarioEncontrado;
-
-            // Navega para o dashboard (função global exposta pelo App)
-            if (window.App) window.App.navegar('dashboard');
-        } else {
-            alert("Usuário ou senha incorretos!");
+                // Navega para o dashboard (função global exposta pelo App)
+                if (window.App !== undefined && window.App !== null) {
+                    window.App.navegar('dashboard');
+                }
+                return true;
+            } else {
+                alert("Usuário ou senha incorretos!");
+                return false;
+            }
+        } catch (error) {
+            console.error('Erro ao logar: ', error);
+            alert("Erro ao logar. Tente novamente mais tarde.");
+            return false;
         }
     },
 
